@@ -1,0 +1,1 @@
+from .network_structure import load_and_train_model
