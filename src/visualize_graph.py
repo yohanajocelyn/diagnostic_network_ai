@@ -1,70 +1,46 @@
-import os
-import matplotlib.pyplot as plt
-import networkx as nx
 import streamlit as st
-import numpy as np
-# Importing from your project structure
-from network_structure import load_and_train_model 
+import networkx as nx
+from network_structure import load_and_train_model # Ensure this import matches your file structure
+import os
 
-# 1. FIXED: Added double underscores to __file__
-# Points to the data folder relative to this script
+# Define path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 csv_path = os.path.join(BASE_DIR, '..', 'data', 'dataset.csv')
 
 def visualize_network_in_streamlit():
+    st.title("Diagnostic Logic Map")
+    
     try:
-        # 2. Load model
-        model, _ = load_and_train_model(csv_path)
+        # 1. Load the Model
+        with st.spinner("Learning Structure..."):
+            model, _ = load_and_train_model(csv_path)
 
-        # Create a specific figure object
-        fig, ax = plt.subplots(figsize=(14, 10))
+        # 2. Convert NetworkX to Graphviz (DOT format) manually
+        # This avoids installing heavy dependencies like 'pydot' on Windows
+        dot_code = 'digraph G {\n'
         
-        # 3. FIXED: Added 'iterations' and 'seed' to ensure consistent layout
-        # shell_layout is good, but spring_layout shows the "Web" better
-        pos = nx.spring_layout(model, k=1.5, iterations=100, seed=42)
-
-        # 4. FIXED: The "Jitter" fix to prevent the StopIteration/Bezier error
-        # This ensures no two nodes have the exact same coordinates
-        for node in pos:
-            pos[node] += np.random.uniform(-0.02, 0.02, size=2)
-
-        # Draw the nodes
-        nx.draw_networkx_nodes(
-            model, pos, 
-            node_size=2500, 
-            node_color="#FF9999", 
-            edgecolors="black", # Added border for a cleaner look
-            ax=ax
-        )
-
-        # Draw the edges (Arrows)
-        nx.draw_networkx_edges(
-            model, pos, 
-            edge_color="gray", 
-            arrowstyle='-|>', 
-            arrowsize=25, 
-            width=1.5,
-            connectionstyle='arc3, rad = 0.1', # Curved edges like your reference
-            ax=ax
-        )
-
-        # Draw Labels
-        nx.draw_networkx_labels(
-            model, pos, 
-            font_size=9, 
-            font_weight="bold", 
-            ax=ax
-        )
-
-        ax.set_title("Learned Causal Structure (Bayesian Network)", fontsize=15)
-        ax.axis('off') 
+        # A. Global Graph Settings to match your image style
+        dot_code += '  rankdir=TB;\n'       # TB = Top to Bottom layout
+        dot_code += '  splines=ortho;\n'    # Use Right-Angle lines (like the image)
+        dot_code += '  nodesep=0.4;\n'      # Space between nodes
+        dot_code += '  ranksep=0.8;\n'      # Space between layers
         
-        # Display in Streamlit
-        st.pyplot(fig) 
+        # B. Node Styling (Rectangular Boxes)
+        dot_code += '  node [shape=box, style=filled, fillcolor="#f9f9f9", fontname="Sans-Serif"];\n'
+        
+        # C. Add Edges from your Learned Model
+        for u, v in model.edges():
+            # Sanitize names (replace spaces with underscores if needed for internal IDs)
+            # But keep readable labels
+            dot_code += f'  "{u}" -> "{v}";\n'
+            
+        dot_code += '}'
+
+        # 3. Render directly in Streamlit
+        st.graphviz_chart(dot_code, use_container_width=True)
 
     except Exception as e:
-        st.error(f"An error occurred generating the graph: {e}")
+        st.error(f"Error visualizing graph: {e}")
 
-# 5. FIXED: Added double underscores to __name__ and __main__
 if __name__ == "__main__":
     visualize_network_in_streamlit()
