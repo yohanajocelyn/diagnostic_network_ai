@@ -4,39 +4,39 @@ from pgmpy.estimators import HillClimbSearch, BayesianEstimator, BIC
 from pgmpy.inference import VariableElimination
 
 def load_and_train_model(csv_path):
-    # 1. Load the dataset
+    # Load the dataset
     df = pd.read_csv(csv_path)
     
-    # 2. Optimized Data Preparation
-    # With 40k rows, ensure we use efficient types
+    # Preprocess the data,
+    # TYPE adalah target, sisanya dimapping jadi 0 and 1
     for col in df.columns:
         if col != 'TYPE':
             df[col] = df[col].astype(int)
 
-    # 3. Structural Learning (The "Thinking" Phase)
+    # Set the HillClimbSearch buat df tersebut
     hc = HillClimbSearch(df)
     
-    # With 40k rows, BIC is extremely accurate. 
-    # We increase max_iter because there is more data to explore.
+    # Proses mencari struktur yang terbaik dengan BIC scoring
+    # Max iteration dijadikan 2000
     best_structure = hc.estimate(
         scoring_method=BIC(df), 
         max_iter=2000, 
         show_progress=True
     )
     
-    # 4. Create the Model
+    # Bikin gambar Bayesian Network berdasarkan struktur terbaik yang ditemukan + add nodes dari kolom-kolom datasetnya
+    # karena best_structure hanya memberikan relationshipnya saja
     model = DiscreteBayesianNetwork(best_structure.edges())
     model.add_nodes_from(df.columns)
     
-    # 5. High-Volume Probability Fitting
-    # BDeu prior with 40k rows will be very precise.
+    # Dari relationship yang sudah ditemukan, fit ke modelnya untuk belajar probabilitynya
     model.fit(
         df, 
         estimator=BayesianEstimator, 
-        prior_type="BDeu", 
-        equivalent_sample_size=5
+        prior_type="BDeu", # 
+        equivalent_sample_size=5 # Untuk mencegah probabilitas 0 kalau semisal penyakit dan gejala yang tidak berhubungan
     )
     
-    # 6. Initialize Inference
+    # Model matematika yang akan menghitungkan probabilitas berdasarkan evidence (gejala yang sudah dijawab) pakai .query()
     infer = VariableElimination(model)
-    return model, infer
+    return model, inf
