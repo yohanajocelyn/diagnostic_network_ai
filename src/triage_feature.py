@@ -21,6 +21,7 @@ class TriageAgent:
     def _calculate_entropy(self, probs):
         # Pakai Shannon Entropy
         # Metode untuk menghitung seberapa yakin kita terhadap prediksi saat ini berdasarkan semua probabilitas dari semua tipe
+        # Semakin tinggi entropy semakin unsure
         entropy = 0
         for p in probs.values():
             if p > 0:

@@ -2,7 +2,6 @@ import pandas as pd
 from pgmpy.models import DiscreteBayesianNetwork
 from pgmpy.estimators import HillClimbSearch, BayesianEstimator, BIC
 from pgmpy.inference import VariableElimination
-from imblearn.under_sampling import RandomUnderSampler
 
 def load_and_train_model(csv_path):
     # Load the dataset
