@@ -99,13 +99,7 @@ pip install -r requirements.txt
 Now you can run the Diagnostic Network AI. In your terminal, navigate to the directory where the Diagnostic Network AI code is located and run:
 
 ```bash
-python app.py
-```
-
-or
-
-```bash
-python3 app.py
+streamlit run app.py
 ```
 
 This will start the Diagnostic Network AI Streamlit app.
