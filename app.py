@@ -3,24 +3,20 @@ import pandas as pd
 from src.network_structure import load_and_train_model
 from src.triage_feature import TriageAgent
 
-# --- Page Config ---
 st.set_page_config(page_title="AI Diagnostic Assistant", page_icon="🩺", layout="wide")
 
-# --- 1. Load Model (Cached) ---
-# This ensures we load the heavy AI model only ONCE, no matter how many times you switch menus.
+# Memastikan modelnya hanya diload sekali saja
 @st.cache_resource
 def get_ai_system():
-    # Load the DAG and Inference Engine
-    # Ensure your data path is correct relative to app.py
+    # Load DAG dan inferencenya
     model, infer = load_and_train_model('data/dataset.csv')
     
-    # Initialize our Smart Triage Logic
+    # Inisialisasi triage agentnya
     agent = TriageAgent(model, infer)
     return model, infer, agent
 
-# --- 2. Helper Functions ---
+# Function untuk display
 def display_results(probs):
-    """Reusable function to display probability charts"""
     if not probs:
         st.warning("No sufficient data to form a diagnosis yet.")
         return
@@ -48,37 +44,56 @@ def display_results(probs):
     with st.expander("See detailed probabilities"):
         st.table(df_probs)
 
-# --- 3. Main Application Flow ---
+def render_network_graph(model):
+    # Code untuk generate graphnya supaya sekalian ditampilkan di main Streamlit pagenya
+    try:
+        dot_code = 'digraph G {\n'
+        
+        dot_code += '  rankdir=TB;\n'
+        dot_code += '  splines=ortho;\n'
+        dot_code += '  nodesep=0.4;\n'
+        dot_code += '  ranksep=0.8;\n'
+        dot_code += '  node [shape=box, style=filled, fillcolor="#f9f9f9", fontname="Sans-Serif"];\n'
+        
+        dot_code += '  "TYPE" [fillcolor="#ffcccc", penwidth=2];\n'
+        
+        for u, v in model.edges():
+            dot_code += f'  "{u}" -> "{v}";\n'
+            
+        dot_code += '}'
+        st.graphviz_chart(dot_code, use_container_width=True)
+        
+    except Exception as e:
+        st.error(f"Error visualizing graph: {e}")
+
+# Main App Flow
 try:
     model, infer, agent = get_ai_system()
     
-    # --- Sidebar Navigation ---
+    # Sidebar Nav dan pilihan menunya
     st.sidebar.title("Navigation")
-    app_mode = st.sidebar.radio("Choose Mode:", ["Manual Checklist", "Smart Triage (AI)"])
+    app_mode = st.sidebar.radio("Choose Mode:", ["Manual Checklist", "Smart Triage (AI)", "Network Visualization"])
     st.sidebar.markdown("---")
 
-    # =========================================================
-    # MODE 1: MANUAL CHECKLIST
-    # =========================================================
+    # Menu untuk pengisian semua gejala secara manual
     if app_mode == "Manual Checklist":
         st.title("📋 Symptom Checklist")
         st.markdown("Select all symptoms that apply to see an immediate diagnosis.")
         st.divider()
 
-        # Get all symptoms from the model (excluding the Target 'TYPE')
-        # We sort them alphabetically for easier reading
+        # Ambil semua node kecuali targetnya dan disort secara alfabet
         all_nodes = sorted([n for n in model.nodes() if n != 'TYPE'])
         
-        # Create a form so the page doesn't reload on every single checkbox click
+        # Buat form untuk checklistnya
         with st.form("checklist_form"):
             col1, col2, col3 = st.columns(3)
             user_evidence = {}
             
-            # Distribute checkboxes across 3 columns
+            # Format formnya pakai 3 kolom
             for i, symptom in enumerate(all_nodes):
                 label = symptom.replace("_", " ").title()
                 
-                # Logic to place in columns
+                # Logika peletakan kolomnya
                 if i % 3 == 0:
                     with col1:
                         is_checked = st.checkbox(label)
@@ -102,15 +117,13 @@ try:
                     probs = agent.get_current_prediction(user_evidence)
                     display_results(probs)
 
-    # =========================================================
-    # MODE 2: SMART TRIAGE (Conversational)
-    # =========================================================
+    # Mode menu untuk fitur tambahan
     elif app_mode == "Smart Triage (AI)":
         st.title("🩺 Smart Triage Assistant")
         st.markdown("I will ask specific questions to narrow down the diagnosis efficiently.")
         st.divider()
 
-        # Initialize Session State for Triage
+        # Inisialisasi session state untuk fiturnya
         if 'triage_evidence' not in st.session_state:
             st.session_state['triage_evidence'] = {}
         if 'triage_history' not in st.session_state:
@@ -118,17 +131,16 @@ try:
         if 'triage_finished' not in st.session_state:
             st.session_state['triage_finished'] = False
 
-        # --- 1. LIVE ANALYSIS (MOVED TO TOP) ---
-        # We use a container to keep this section distinct and wide
+        # Proses perubahan probabilitasnya yang ditampilkan secara live
         with st.container():
             st.subheader("Live Analysis")
             current_probs = agent.get_current_prediction(st.session_state['triage_evidence'])
             
             if current_probs:
-                # Create a top layout: Metric on Left, Chart on Right (Wider)
+                # Buat layout atas
                 metric_col, chart_col = st.columns([1, 2])
                 
-                # Helper to prepare data
+                # Helper buat prepare data
                 df_probs = pd.DataFrame({
                     'Condition': list(current_probs.keys()),
                     'Probability': list(current_probs.values())
@@ -138,12 +150,10 @@ try:
                 top_prob = df_probs.iloc[0]['Probability']
 
                 with metric_col:
-                    # Big bold metric
                     st.metric(label="Primary Diagnosis", value=top_cond, delta=f"{top_prob:.1%}")
                     st.caption("Based on current evidence.")
 
                 with chart_col:
-                    # Full width chart
                     st.bar_chart(df_probs.set_index('Condition'), height=200)
             else:
                 st.info("Awaiting initial symptoms to generate a prediction.")
@@ -155,15 +165,14 @@ try:
             ans_text = "✅ Yes" if a == 1 else "❌ No"
             st.info(f"**{q_text}?** — {ans_text}")
 
-        # 2. Ask Next Question
+        # Buat pertanyaan selanjutnya
         if not st.session_state['triage_finished']:
-            # AI Logic: Find best question
+            # AI logic: Find best question
             next_q = agent.get_next_best_question(st.session_state['triage_evidence'])
             
             if next_q:
                 st.subheader(f"Do you have: {next_q.replace('_', ' ').title()}?")
                 
-                # Buttons
                 c1, c2, _ = st.columns([1, 1, 3])
                 if c1.button("Yes", key=f"yes_{next_q}", type="primary", use_container_width=True):
                     st.session_state['triage_evidence'][next_q] = 1
@@ -184,6 +193,14 @@ try:
                 st.session_state['triage_history'] = []
                 st.session_state['triage_finished'] = False
                 st.rerun()
+    
+    # Tab baru buat nampilin graphnya
+    elif app_mode == "Network Visualization":
+        st.title("🧠 Diagnostic Logic Map")
+        st.markdown("Visual representation of the learned Bayesian Network structure.")
+        st.divider()
+        
+        render_network_graph(model)
 
 except Exception as e:
     st.error(f"System Error: {e}")
