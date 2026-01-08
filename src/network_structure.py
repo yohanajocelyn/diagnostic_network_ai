@@ -12,24 +12,14 @@ def load_and_train_model(csv_path):
     for col in df.columns:
         if col != 'TYPE':
             df[col] = df[col].astype(int)
-    
-    # X = df.drop(columns=['TYPE'])
-    # y = df['TYPE']
-
-    # rus = RandomUnderSampler(random_state=42)
-    # X_resampled, y_resampled = rus.fit_resample(X, y)
-
-    # df_balanced = pd.concat([X_resampled, y_resampled], axis=1)
-
-    df_balanced = df
 
     # Set the HillClimbSearch buat df tersebut
-    hc = HillClimbSearch(df_balanced)
+    hc = HillClimbSearch(df)
     
     # Proses mencari struktur yang terbaik dengan BIC scoring
     # Max iteration dijadikan 2000
     best_structure = hc.estimate(
-        scoring_method=BIC(df_balanced), 
+        scoring_method=BIC(df), 
         max_iter=2000, 
         show_progress=True
     )
@@ -37,11 +27,11 @@ def load_and_train_model(csv_path):
     # Bikin gambar Bayesian Network berdasarkan struktur terbaik yang ditemukan + add nodes dari kolom-kolom datasetnya
     # karena best_structure hanya memberikan relationshipnya saja
     model = DiscreteBayesianNetwork(best_structure.edges())
-    model.add_nodes_from(df_balanced.columns)
+    model.add_nodes_from(df.columns)
     
     # Dari relationship yang sudah ditemukan, fit ke modelnya untuk belajar probabilitynya
     model.fit(
-        df_balanced, 
+        df, 
         estimator=BayesianEstimator, 
         prior_type="BDeu", # 
         equivalent_sample_size=5 # Untuk mencegah probabilitas 0 kalau semisal penyakit dan gejala yang tidak berhubungan
