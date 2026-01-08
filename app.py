@@ -2,8 +2,15 @@ import streamlit as st
 import pandas as pd
 from src.network_structure import load_and_train_model
 from src.triage_feature import TriageAgent
+import itertools
 
 st.set_page_config(page_title="AI Diagnostic Assistant", page_icon="🩺", layout="wide")
+
+MEDICAL_DISCLAIMER = """
+**Disclaimer:** This app provides a preliminary assessment based on the symptoms you reported. 
+It is intended for self-evaluation purposes only and does not constitute a medical diagnosis. 
+Please consult a qualified healthcare professional for medical advice, diagnosis, or treatment.
+"""
 
 # Memastikan modelnya hanya diload sekali saja
 @st.cache_resource
@@ -66,6 +73,65 @@ def render_network_graph(model):
     except Exception as e:
         st.error(f"Error visualizing graph: {e}")
 
+def render_cpt_viewer(model):
+    st.markdown("### 📊 Conditional Probability Tables (CPT)")
+    
+    # 1. Ambil daftar node
+    nodes = sorted(model.nodes())
+    if 'TYPE' in nodes:
+        nodes.remove('TYPE')
+        nodes.insert(0, 'TYPE')
+
+    selected_node = st.selectbox("Choose Node:", nodes)
+
+    if selected_node:
+        try:
+            # Ambil CPD
+            cpd = model.get_cpds(selected_node)
+            st.write(f"**Node:** {selected_node}")
+
+            # Ambil states (kemungkinan nilai) untuk Node ini (Baris)
+            child_states = cpd.state_names[selected_node]
+            
+            # Ambil Parents (Kolom)
+            evidence = cpd.variables[1:] 
+            
+            if not evidence:
+                # Jika Root Node (tidak punya parent)
+                st.info("Root Node.")
+                df = pd.DataFrame(cpd.values, index=child_states, columns=["Probability"])
+            else:
+                st.write(f"**Influenced by:** {', '.join(evidence)}")
+                
+                # --- PERBAIKAN HEADER KOLOM ---
+                # Ambil state names untuk setiap parent
+                parent_states_list = [cpd.state_names[parent] for parent in evidence]
+                
+                # Buat kombinasi (Cartesian Product)
+                col_combinations = list(itertools.product(*parent_states_list))
+                
+                # Format Header yang CANTIK dan BERSIH
+                col_headers = []
+                for combo in col_combinations:
+                    # Gabungkan Nama Parent dan Nilainya
+                    # Contoh: "TYPE=COVID" atau "TYPE=FLU | FEVER=1"
+                    parts = []
+                    for var_name, state_val in zip(evidence, combo):
+                        parts.append(f"{var_name}={state_val}")
+                    col_headers.append(" | ".join(parts))
+                
+                # Reshape values menjadi 2D
+                values_2d = cpd.values.reshape(len(child_states), -1)
+                
+                # Buat DataFrame
+                df = pd.DataFrame(values_2d, index=child_states, columns=col_headers)
+
+            # Tampilkan Tabel
+            st.dataframe(df, use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Error displaying CPD: {e}")
+
 # Main App Flow
 try:
     model, infer, agent = get_ai_system()
@@ -78,6 +144,7 @@ try:
     # Menu untuk pengisian semua gejala secara manual
     if app_mode == "Manual Checklist":
         st.title("📋 Symptom Checklist")
+        st.warning(MEDICAL_DISCLAIMER, icon="⚠️")
         st.markdown("Select all symptoms that apply to see an immediate diagnosis.")
         st.divider()
 
@@ -121,6 +188,7 @@ try:
     elif app_mode == "Smart Triage (AI)":
         st.title("🩺 Smart Triage Assistant")
         st.markdown("I will ask specific questions to narrow down the diagnosis efficiently.")
+        st.warning(MEDICAL_DISCLAIMER, icon="⚠️")
         st.divider()
 
         # Inisialisasi session state untuk fiturnya
@@ -201,6 +269,8 @@ try:
         st.divider()
         
         render_network_graph(model)
+        st.divider()
+        render_cpt_viewer(model)
 
 except Exception as e:
     st.error(f"System Error: {e}")
